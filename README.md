@@ -19,7 +19,7 @@ Operating system: Linux Ubuntu 22.04 LTS was used for the analysis.
 | Package            | Version     | Repository |
 |--------------------|-------------|------------|
 | Python             | 3.10.12     | [python/cpython](https://github.com/python/cpython) |
-| metagenomics-atlas | 2.18.2      | [metagenome-atlas/atlas](https://github.com/metagenome-atlas/atlas) |
+| metagenome-atlas | 2.18.2      | [metagenome-atlas/atlas](https://github.com/metagenome-atlas/atlas) |
 | R                  | 4.4.1       | [wch/r-source](https://github.com/wch/r-source) |
 | phytools           | 2.3-0       | [liamrevell/phytools](https://github.com/liamrevell/phytools) |
 | tidytree           | 0.4.6       | [YuLab-SMU/tidytree](https://github.com/YuLab-SMU/tidytree) |
