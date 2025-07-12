@@ -1,4 +1,4 @@
-# A repo summplementary to FMT trial
+# A repo supplementary to FMT trial
 
 # 1. System requirements:
 
