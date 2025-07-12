@@ -2,19 +2,16 @@
 
 # 1. System requirements:
 
-
-```sh
 Operating system: Linux Ubuntu 22.04 LTS was used for the analysis.
 
 
 # Recourse requirement
 
-Job type	        CPUs	    Memory (Gb)
 
-Atlas pipline	    40	        150
-r workflow	        8	        16
-
-```
+| Job type            | CPUs     | Memory (Gb) |
+|--------------------|-------------|------------|
+| Atlas pipline	             | 40    | 150 |
+| R workflow             | 8    | 16 |
 
 # 2. Versions for all softwares used
 
@@ -94,3 +91,7 @@ pfam = "Genecatalog/annotations/dram/pfam.parquet"
 
 
 ```
+
+# 6. Instructions on statistical analysis in R
+
+### A detailed instruction can be found in this ![markdown]() file. 
