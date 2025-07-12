@@ -52,10 +52,13 @@ mamba install -c bioconda -c conda-forge metagenome-atlas=2.18.2
 
 # 4. Instruction to run the demo data
 
+### NOTE: expected run time on a desktop computer is approx. 5h.
+
 ```sh
 atlas init --db-dir database demo_data/ -w output --threads 8
 
 tlas run all  --jobs 8  -w ./output -c ./output/config.yaml --keep-going
+
 
 ```
 
