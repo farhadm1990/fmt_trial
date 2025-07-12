@@ -94,4 +94,4 @@ pfam = "Genecatalog/annotations/dram/pfam.parquet"
 
 # 6. Instructions on statistical analysis in R
 
-### A detailed instruction can be found in this ![markdown]() file. 
+### A detailed instruction can be found in this ![markdown](https://github.com/farhadm1990/fmt_trial/blob/main/r_FMT.rmd) file. 
