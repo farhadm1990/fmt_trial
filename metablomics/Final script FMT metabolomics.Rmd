@@ -1,0 +1,1614 @@
+---
+title: "FMT 19-02-25"
+author: "Stef"
+output: html_document
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = F, warning = F)
+```
+
+# Library
+```{r}
+packages <- c(
+  "ropls", "ggplot2", "tidyverse", "readxl","writexl","ade4",
+  "glmnet", "Matrix", "pls", "broom", "dplyr", "tidyr", "viridis", "ggpattern", "Hmisc", "reshape2", "igraph", "ggraph", "tidygraph","patchwork", "nlme","sjPlot", "pheatmap", "RColorBrewer", "ggsci") 
+
+
+lapply(packages, library, character.only = TRUE)
+```
+
+# Data
+```{r}
+coredata<-read_xlsx()
+
+coredata_lme<-read_xlsx()
+
+taxa<-read_tsv()
+
+colnames(coredata)
+
+X<- coredata %>%
+  select(105:536) %>%  
+  mutate_all(as.numeric) %>%
+  mutate_all(~ log10(. + 1)) %>%
+  as.data.frame()
+
+X_b4<-X%>%
+  slice(-(18:34))%>%
+  as.data.frame()
+
+Mo_b4<- coredata[1:17,75:104]
+Mo_b4<-Mo_b4%>%mutate_all(as.numeric) %>%
+  mutate_all(~ log10(. + 1)) %>%
+  as.data.frame()
+
+Mo_af<- coredata[18:34,75:104]
+Mo_af<-Mo_af%>%mutate_all(as.numeric) %>%
+  mutate_all(~ log10(. + 1)) %>%
+  as.data.frame()
+      
+X_af<-X%>%
+  slice(-(1:17))%>%
+  as.data.frame()
+
+Y <- coredata %>%
+  select(2:74) %>%  
+  mutate_all(as.numeric) %>%
+  mutate_all(~ log10(. + 1)) %>%
+  as.data.frame()
+
+Y_b4<-Y%>%
+  slice(-(18:34))%>%
+  as.data.frame()
+
+Y_af<-Y%>%
+  slice(-(1:17))%>%
+  as.data.frame()
+
+```
+
+## List of metabolites
+```{r}
+variables <- c("Ursocholic acid", "betaMuricholic acid",
+               "Glycoursodeoxycholic acid", "Taurolithocholic acidsulfate",
+               "Hyocholic acid", "Ursodeoxycholic acid", "Glycocholic acid",
+               "Oxocholic acid", "Taurocholic acid", "Hyodeoxycholic acid",
+               "Cholic acid", "Ketolithocholic acid", 
+               "Glycochenodeoxycholic acid", "Taurochenodeoxycholic acid",
+               "Glycodeoxycholic acid", "Taurodeoxycholic acid",
+               "Oxochenodeoxycholic acid","Chenodeoxycholic acid",
+               "Glycolithocholic acid","Taurolithocholic acid", 
+               "Deoxycholic acid","Isolithocholic acid", "Lithocholic acid", 
+               "omegaMuricholic acid", "Acetic acid", "Formic acid",
+               "Propanoic acid", "Methylpropanoic acid", "Butanoic acid",
+               "Methylbutanoic acid", "Pentanoic acid", "Hexanoic acid",
+               "Heptanoic acid", "Succinic acid", "Fumaric acid", "Alanine",
+               "Glycine", "Valine", "Picolinic acid", "Leucine", 
+               "Oxoglutaric acid", "Isoleucine", "Indole", "Threonine",
+               "Malic acid", "Proline", "Methylindole", "cisAconitic acid",
+               "Asparagine", "Aminovaleric acid", "Aspartic acid", 
+               "Citric acid", "Serine", "Pyridinedicarboxylic acid",
+               "Isocitric acid", "Glutamic acid", "Methionine",
+               "Hydroxyphenylacetic acid", "Phenylalanine", 
+               "Hydroxyphenyl propionic acid","Aminobenzoic acid",
+               "Anthranilic acid",  "Indole3pyruvic acid Indole3acetic acid",
+               "Glutamine","Ornithine", "Lysine", "Indole3propionic acid",
+               "Indole3butyric acid", "Histidine", "Tyrosine",
+               "Indole3acrylic acid", "Tryptophan", "Cystine"
+)
+
+# Define metabolite groups
+groups <- list(
+  "bile acids" = c("Ursocholic acid", 
+                   "beta-Muricholic acid",   
+                   "Glycoursodeoxycholic acid", 
+                   "Taurolithocholic acid sulfate", 
+                   "Hyocholic acid",
+                   "Ursodeoxycholic acid", 
+                   "Glycocholic acid", 
+                   "Oxocholic acid", 
+                   "Taurocholic acid", 
+                   "Hyodeoxycholic acid",
+                   "Cholic acid",
+                   "12-Ketolithocholic acid", 
+                   "Glycochenodeoxycholic acid", 
+                   "Taurochenodeoxycholic acid", 
+                   "Glycodeoxycholic acid", 
+                   "Taurodeoxycholic acid", 
+                   "Oxochenodeoxycholic acid", 
+                   "Chenodeoxycholic acid", 
+                   "Glycolithocholic acid",
+                   "Taurolithocholic acid",
+                   "Deoxycholic acid", 
+                   "Isolithocholic acid", 
+                   "Lithocholic acid", 
+                   "omega-Muricholic acid"),
+  
+  "short-chain fatty acids" = c("Acetic acid", 
+                                "Formic acid", 
+                                "Propanoic acid",
+                                "2-Methylpropanoic acid", 
+                                "Butanoic acid",
+                                "3-Methylbutanoic acid", 
+                                "Pentanoic acid", 
+                                "Hexanoic acid", 
+                                "Heptanoic acid"),
+  
+  "tryptophan metabolites" = c("Succinic acid", 
+                               "Fumaric acid", 
+                               "Alanine", 
+                               "Glycine", 
+                               "Valine", 
+                               "2-Picolinic acid", 
+                               "Leucine",
+                               "2-Oxoglutaric acid", 
+                               "Isoleucine", 
+                               "Indole", 
+                               "Threonine", 
+                               "Malic acid", 
+                               "Proline",
+                               "3-Methylindole", 
+                               "cis-Aconitic acid", 
+                               "Asparagine", 
+                               "5-Aminovaleric acid", 
+                               "Aspartic acid", 
+                               "Citric acid", 
+                               "Serine",
+                               "2,3-Pyridinedicarboxylic acid", 
+                               "Isocitric acid", 
+                               "Glutamic acid", 
+                               "Methionine",
+                               "4-Hydroxyphenylacetic acid",
+                               "Phenylalanine", 
+                               "3-(4-hydroxyphenyl)propionic acid",
+                               "4-Aminobenzoic acid", "Anthranilic acid", 
+                               "Indole-3-pyruvic acid/Indole-3-acetic acid",
+                               "Glutamine", 
+                               "Ornithine", 
+                               "Lysine", 
+                               "Indole-3-propionic acid", 
+                               "Indole-3-butyric acid", 
+                               "Histidine", 
+                               "Tyrosine", 
+                               "Indole-3-acrylic acid", 
+                               "Tryptophan", 
+                               "Cystine")
+)
+
+```
+
+##Metadata
+```{r}
+metadata<-read.csv()
+```
+
+# Descriptives
+```{r}
+# Distribution of metabolites
+g1 <- Y %>% data.frame() %>% 
+  gather(var,y) %>% 
+  ggplot(data = ., aes(y)) + geom_histogram() + 
+  facet_wrap(~var, scales = 'free')
+ggsave('allhist.pdf',g1,height = 20, width = 20)
+ggsave('allhist_log.pdf',g1 + scale_x_log10(),height = 20, width = 20)
+
+# Random selection of MAGs
+selected_cols <- sample(colnames(X), 20)  
+X<-as.data.frame(X)
+X_long <- X %>%
+  select(all_of(selected_cols)) %>%
+  pivot_longer(cols = everything(), names_to = "Variable", values_to = "Value")
+
+# Distribution of MAGs
+MAGdistrib <- ggplot(X_long, aes(x = Value)) +
+  geom_histogram(bins = 30, fill = "blue", alpha = 0.7) +
+  facet_wrap(~ Variable, scales = "free") +
+  theme_minimal() +
+  labs(title = "Sampled distribution of variables", x = "Value", y = "Count")
+
+ggsave("Distribution of MAGs.pdf", plot = MAGdistrib, width = 10, height = 6)
+
+ggsave("Distribution of MAGs_log10.pdf",MAGdistrib + scale_x_log10(),height = 20, width = 20)
+
+
+```
+
+# X PCA
+
+```{r}
+# Select columns with variance > 0
+x <- X[,apply(X,2,sd)>0]
+
+# Run PCA
+mPCA <- prcomp(x, scale. = FALSE)
+
+PCAscores <- mPCA$x %>% 
+  data.frame() %>% 
+  mutate(time = coredata$time) 
+
+PC1nPC2 <- PCAscores %>%
+  select(c(1,2,35))
+
+df_wide <- cbind(PC1nPC2, Y)
+
+
+df <- df_wide %>%
+  pivot_longer(
+    cols = -c(PC1, PC2, time),
+    names_to = "Metabolite",
+    values_to = "Concentration"
+  )
+
+df<-as.data.frame(df)
+
+# PCA plot
+pca_plot <- ggplot(PCAscores, aes(x = PC1, y = PC2, color = as.factor(time))) + 
+  geom_point() + 
+  labs(title = "PCA: PC1 vs PC2", x = "PC1", y = "PC2", color = "Time") + 
+  theme_minimal()
+
+print(pca_plot)
+
+plot(mPCA)
+
+# Eigenvalues & plot
+eigenvalues <- mPCA$sdev^2
+kaiser_components <- sum(eigenvalues > 1)
+plot(eigenvalues, type = "b", xlab = "PC", ylab = "Eigenvalue",
+     main = "Scree plot with Kaiser criterion")
+abline(h = 1, col = "red", lty = 2)
+
+prop_var <- eigenvalues / sum(eigenvalues)
+
+cum_var <- cumsum(prop_var)
+
+print(cum_var)
+
+# Plot cumulative variance 
+plot(cum_var, type = "b", xlab = "Number of PCs", 
+     ylab = "Cumulative proportion of variance explained", 
+     main = "Cumulative variance explained by PCA") 
+abline(h = 0.8, col = "blue", lty = 2)  
+
+```
+
+## PC MAGs
+```{r}
+
+# Assign MAGs the species name
+my_PCmags<-c("MAG027",
+"MAG032",
+"MAG038",
+"MAG067",
+"MAG073",
+"MAG108",
+"MAG112",
+"MAG180",
+"MAG218",
+"MAG219",
+"MAG257",
+"MAG332",
+"MAG335",
+"MAG397",
+"MAG026"
+)
+
+# Dataframe with PCA relative and absolute loadings
+pca_loadings_df <- as.data.frame(mPCA$rotation) %>%
+  rownames_to_column("Gene") %>%
+  gather(PC, Loading, -Gene) %>%
+  mutate(AbsLoading = abs(Loading)) %>%  
+  filter(PC %in% c("PC1", "PC2"))  
+
+# Selecting the top 10 MAGs based on absolute loading
+top_genes <- pca_loadings_df %>%
+  group_by(PC) %>%
+  top_n(10, AbsLoading) %>%
+  ungroup()
+
+top_genes_wide <- top_genes %>%
+  select(Gene, PC, Loading, AbsLoading) %>%
+  spread(PC, Loading)  
+intersect(my_PCmags, taxa$genome)
+
+
+write_xlsx(top_genes_wide, "Top_Contributing_Genes_PC1_PC2.xlsx")
+
+
+taxa_filtered <- taxa %>% 
+  filter(genome %in% my_PCmags)%>%
+  select(c(1,8))
+
+top_genes <- top_genes %>%
+  mutate(Gene = sub("^rel_", "", Gene))%>%
+  select(c(1,2,3))%>%
+  left_join(taxa_filtered, by = c("Gene" = "genome")) 
+
+
+# Create the plot for top 10 MAGs for PC1 and PC2
+p <- ggplot(top_genes, aes(x = reorder(Species, Loading), y = Loading, fill = PC, pattern = PC)) +
+  geom_bar_pattern(
+    stat = "identity",
+    pattern_fill = "black",        
+    pattern_density = 0.2,
+    pattern_spacing = 0.05,
+    pattern_key_scale_factor = 0.6
+  ) +
+  facet_wrap(~ PC, scales = "free_x") +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 90, hjust = 1, size = 6),
+    plot.title = element_text(size = 14, face = "bold")
+  ) +
+  labs(title = "Top 10 contributing species to PC1 and PC2",
+       x = "Species", y = "Loading") +
+  scale_fill_viridis_d(option = "C", end = 0.85) +
+  scale_pattern_manual(values = c(PC1 = "stripe", PC2 = "crosshatch"))
+
+
+ggsave("Top_Contributing_Species_PC1_PC2_Plot.png", plot = p, width = 12, height = 6, dpi = 300)
+
+```
+
+# PCR: PC1, PC2, time results with confint
+```{r}
+#  PCR function with CIs and back-transformation
+getPCRResults_PC1_PC2 <- function(df) {
+  m1 <- lm(data = df, Concentration ~ PC1 + PC2 + time + PC1:time + PC2:time)  
+  m0 <- lm(data = df, Concentration ~ 1)  
+  r <- anova(m1, m0) %>% tidy()
+  
+  coef_df <- tidy(m1) %>%
+    filter(term %in% c("time", "PC1:time", "PC2:time")) 
+  
+  conf_int <- confint(m1)  
+  
+  coef_df <- coef_df %>%
+    mutate(
+      CI_Lower = conf_int[term, 1],
+      CI_Upper = conf_int[term, 2]
+    )
+  
+  return(list(ANOVA = r, Coefficients = coef_df))
+}
+
+# Results PCR
+results_PCR <- df %>% 
+  group_by(Metabolite) %>% 
+  filter(!is.infinite(Concentration)) %>%  
+  nest() %>%  
+  mutate(
+    result = map(data, ~ getPCRResults_PC1_PC2(df = .x)),
+    Coefficients = map(result, ~ .x$Coefficients)
+  ) %>% 
+  unnest(Coefficients)
+
+# Back transformation 
+results_PCR_backtransf <- results_PCR %>%
+  mutate(
+    Estimate_BackTransformed = round(10^estimate, 2),
+    CI_Lower_BackTransformed = round(10^CI_Lower, 2),  
+    CI_Upper_BackTransformed = round(10^CI_Upper, 2)  
+  )
+
+results_PCR_all <- results_PCR_backtransf %>%
+  select(Metabolite, term, estimate, Estimate_BackTransformed, std.error, p.value, CI_Lower_BackTransformed, CI_Upper_BackTransformed)
+
+```
+
+## Figures PCR PC1:time
+```{r}
+#Select PC1:time data
+
+pc1_time_data <- results_PCR_all %>%
+  filter(term == "PC1:time")  
+
+pc1_time_data$significant <- ifelse(pc1_time_data$p.value < 0.05, "Significant", "Not significant")
+
+
+# Forest plots by metabolite group
+for(group_name in names(groups)) {
+  metabolites_in_group <- groups[[group_name]]
+  
+  pc1_time_data_group <- pc1_time_data %>%
+    filter(Metabolite %in% metabolites_in_group)
+  
+  pc1_time_data_group$significant <- factor(
+    ifelse(pc1_time_data_group$p.value < 0.05, "Significant", "Not significant"),
+    levels = c("Significant", "Not significant")
+  )
+  
+  missing_levels <- setdiff(levels(pc1_time_data_group$significant), unique(pc1_time_data_group$significant))
+  
+  if(length(missing_levels) > 0) {
+    dummy_rows <- data.frame(
+      Metabolite = NA,
+      estimate = NA,
+      std.error = NA,
+      p.value = NA,
+      significant = factor(missing_levels, levels = levels(pc1_time_data_group$significant))
+    )
+    pc1_time_data_group <- rbind(pc1_time_data_group, dummy_rows)
+  }
+  
+  if(group_name == "tryptophan metabolites") {
+    x_limits <- c(-5, 5)
+  } else {
+    x_limits <- c(
+      min(pc1_time_data_group$estimate - pc1_time_data_group$std.error, na.rm = TRUE),
+      max(pc1_time_data_group$estimate + pc1_time_data_group$std.error, na.rm = TRUE)
+    )
+  }
+  
+  p <- ggplot(pc1_time_data_group, aes(x = estimate, y = Metabolite, color = significant)) +
+    geom_point(size = 4, shape = 16, na.rm = TRUE) +
+    geom_errorbarh(aes(xmin = estimate - std.error, xmax = estimate + std.error), height = 0.2, na.rm = TRUE) +
+    scale_color_manual(
+      values = c("Significant" = "red", "Not significant" = "blue"),
+      drop = FALSE,
+      guide = guide_legend(
+        override.aes = list(size = 5, shape = 16, alpha = 1)
+      )
+    ) +
+    labs(
+      title = paste("Forest plot for PC1:time", group_name),
+      x = "Estimate",
+      y = "Metabolite"
+    ) +
+    theme_minimal() +
+    theme(
+      axis.text.y = element_text(size = 8),
+      legend.title = element_blank(),
+      legend.position = "top"
+    ) +
+    scale_x_continuous(limits = x_limits)
+  
+  ggsave(paste0("forest_plot_PC1_time_", group_name, "_ggplot.pdf"), plot = p, width = 7, height = 5)
+}
+
+
+```
+
+
+## Figures PCR PC2:time
+```{r}
+#Select PC2:time data
+
+pc2_time_data <- results_PCR_all %>%
+  filter(term == "PC2:time")  
+
+pc2_time_data$significant <- ifelse(pc1_time_data$p.value < 0.05, "Significant", "Not significant")
+
+# Forest plots by metabolite group
+
+for(group_name in names(groups)) {
+  metabolites_in_group <- groups[[group_name]]
+  
+  pc2_time_data_group <- pc2_time_data %>%
+    filter(Metabolite %in% metabolites_in_group)
+  
+  pc2_time_data_group$significant <- factor(
+    ifelse(pc2_time_data_group$p.value < 0.05, "Significant", "Not significant"),
+    levels = c("Significant", "Not significant")
+  )
+  
+  missing_levels <- setdiff(levels(pc2_time_data_group$significant), unique(pc2_time_data_group$significant))
+  
+  if(length(missing_levels) > 0) {
+    dummy_rows <- data.frame(
+      Metabolite = "",  
+      estimate = NA,
+      std.error = NA,
+      p.value = NA,
+      significant = factor(missing_levels, levels = levels(pc2_time_data_group$significant))
+    )
+    pc2_time_data_group <- rbind(pc2_time_data_group, dummy_rows)
+  }
+
+  p <- ggplot(pc2_time_data_group, aes(x = estimate, y = Metabolite, color = significant)) +
+    geom_point(size = 4, shape = 16, na.rm = TRUE) +
+    geom_errorbarh(
+      aes(xmin = estimate - std.error, xmax = estimate + std.error),
+      height = 0.2, na.rm = TRUE
+    ) +
+    scale_color_manual(
+      values = c("Significant" = "red", "Not significant" = "blue"),
+      drop = FALSE,
+      guide = guide_legend(override.aes = list(size = 5, shape = 16, alpha = 1))
+    ) +
+    labs(
+      title = paste("Forest plot for PC2:time", group_name),
+      x = "Estimate",
+      y = "Metabolite"
+    ) +
+    theme_minimal() +
+    theme(
+      axis.text.y = element_text(size = 8),
+      legend.title = element_blank(),
+      legend.position = "top"
+    )
+
+  ggsave(paste0("forest_plot_PC2_time_", group_name, "_ggplot.pdf"), plot = p, width = 7, height = 5)
+}
+
+```
+
+
+## Figures PCR time
+```{r}
+# Select time data 
+time_data <- results_PCR_all %>%
+  filter(term == "time")  
+
+time_data$significant <- ifelse(time_data$p.value < 0.05, "Significant", "Not significant")
+
+# Forest plots by metabolite group
+for(group_name in names(groups)) {
+  metabolites_in_group <- groups[[group_name]]
+  
+  time_data_group <- time_data %>%
+    filter(Metabolite %in% metabolites_in_group)
+  
+  time_data_group$significant <- factor(
+    ifelse(time_data_group$p.value < 0.05, "Significant", "Not significant"),
+    levels = c("Significant", "Not significant")
+  )
+  
+  missing_levels <- setdiff(levels(time_data_group$significant), unique(time_data_group$significant))
+  
+  if(length(missing_levels) > 0) {
+    dummy_rows <- data.frame(
+      Metabolite = "",  
+      estimate = NA,
+      std.error = NA,
+      p.value = NA,
+      significant = factor(missing_levels, levels = levels(time_data_group$significant))
+    )
+    time_data_group <- rbind(time_data_group, dummy_rows)
+  }
+
+  p <- ggplot(time_data_group, aes(x = estimate, y = Metabolite, color = significant)) +
+    geom_point(size = 4, shape = 16, na.rm = TRUE) +
+    geom_errorbarh(
+      aes(xmin = estimate - std.error, xmax = estimate + std.error),
+      height = 0.2, na.rm = TRUE
+    ) +
+    scale_color_manual(
+      values = c("Significant" = "red", "Not significant" = "blue"),
+      drop = FALSE,
+      guide = guide_legend(override.aes = list(size = 5, shape = 16, alpha = 1))
+    ) +
+    labs(
+      title = paste("Forest Plot for time", group_name),
+      x = "Estimate",
+      y = "Metabolite"
+    ) +
+    theme_minimal() +
+    theme(
+      axis.text.y = element_text(size = 8),
+      legend.title = element_blank(),
+      legend.position = "top"
+    )
+
+  ggsave(paste0("forest_plot_time_", group_name, "_ggplot.pdf"), plot = p, width = 7, height = 5)
+}
+
+```
+
+
+
+
+# Longitudinal mixed model
+```{r}
+
+models <- list()
+colnames(coredata_lme) <- make.names(colnames(coredata_lme))
+
+valid_vars <- colnames(coredata_lme)[3:535]
+valid_vars <- valid_vars[sapply(valid_vars, function(v) var(coredata_lme[[v]], na.rm = TRUE) > 1e-6)]
+
+
+for (var in valid_vars) {
+  formula <- as.formula(paste(var, "~ Age + BMI + Bristol + Time"))
+  models[[var]] <- tryCatch(
+    lme(formula, 
+        data = coredata_lme, 
+        random = ~ 1 | ID, 
+        na.action = na.omit),
+    error = function(e) { 
+      warning(paste("Errore nel modello per variabile:", var, "-", e$message))
+      return(NULL)
+    }
+  )
+}
+print(valid_vars)
+models <- Filter(Negate(is.null), models)
+
+selected_models <- models[names(models) %in% valid_vars]
+tab_model(selected_models, show.est = TRUE, show.p = TRUE, show.ci = FALSE, show.se = TRUE, file = "modelli_lme.html")
+
+results <- data.frame()
+
+for (var in names(models)) {
+  mod <- selected_models[[var]]
+  
+  if (!is.null(mod)) {
+    summary_mod <- summary(mod)
+    coefs <- summary_mod$tTable
+    coefs_df <- data.frame(
+      Response = var,  
+      Term = rownames(coefs),  
+      Estimate = coefs[, "Value"],  
+      StdError = coefs[, "Std.Error"], 
+      p_value = coefs[, "p-value"]  
+    )
+    
+    coefs_df <- coefs_df %>% filter(p_value < 0.05)
+    
+    results <- rbind(results, coefs_df)
+  }
+}
+
+if (nrow(results) == 0) {
+  stop("No significant coefficient found")
+}
+
+summary(models[["rel_MAG266"]])$tTable
+
+attach(coredata)
+
+results_time <- results %>% filter(Term == "Time")
+
+```
+
+# Spearman correlation analysis
+## Bile acids
+```{r}
+valid_vars <- c(colnames(coredata)[3:26], colnames(coredata)[76:105])
+valid_vars <- valid_vars[sapply(valid_vars, function(v) var(coredata[[v]], na.rm = TRUE) > 1e-6)]
+print(valid_vars)
+data_pre <- coredata %>% filter(time == 0) %>% select(all_of(valid_vars))
+data_post <- coredata %>% filter(time == 1) %>% select(all_of(valid_vars))
+
+calc_spearman <- function(data) rcorr(as.matrix(data), type = "spearman")
+cor_pre <- calc_spearman(data_pre)
+cor_post <- calc_spearman(data_post)
+
+cor_matrix_pre <- cor_pre$r
+p_matrix_pre <- cor_pre$P
+cor_matrix_post <- cor_post$r
+p_matrix_post <- cor_post$P
+
+write_xlsx(list(
+  "Spearman_Baseline_bile" = as.data.frame(cor_matrix_pre),
+  "Spearman_p_Baseline_bile" = as.data.frame(p_matrix_pre),
+  "Spearman_FollowUp_bile" = as.data.frame(cor_matrix_post),
+  "Spearman_p_FollowUp_bilr" = as.data.frame(p_matrix_post)
+), "spearman_correlations_full_bile.xlsx")
+
+
+cor_matrix_pre[p_matrix_pre >= 0.05 | abs(cor_matrix_pre) <= 0.5] <- NA
+cor_matrix_post[p_matrix_post >= 0.05 | abs(cor_matrix_post) <= 0.5] <- NA
+
+edges_pre <- melt(cor_matrix_pre, na.rm = TRUE)
+colnames(edges_pre) <- c("from", "to", "weight")
+edges_pre$weight <- as.numeric(edges_pre$weight)
+edges_pre <- edges_pre[edges_pre$from != edges_pre$to, ]
+edges_pre$sign <- ifelse(edges_pre$weight > 0, "Positive", "Negative")
+
+edges_post <- melt(cor_matrix_post, na.rm = TRUE)
+colnames(edges_post) <- c("from", "to", "weight")
+edges_post$weight <- as.numeric(edges_post$weight)
+edges_post <- edges_post[edges_post$from != edges_post$to, ]
+edges_post$sign <- ifelse(edges_post$weight > 0, "Positive", "Negative")
+
+nodes_pre <- data.frame(name = unique(c(edges_pre$from, edges_pre$to)))
+graph_pre <- tbl_graph(nodes = nodes_pre, edges = edges_pre, directed = FALSE)
+
+nodes_post <- data.frame(name = unique(c(edges_post$from, edges_post$to)))
+graph_post <- tbl_graph(nodes = nodes_post, edges = edges_post, directed = FALSE)
+
+plot_pre <- ggraph(graph_pre, layout = "circle") +
+  geom_edge_link(aes(color = sign), alpha = 0.8, show.legend = FALSE) +
+  geom_node_point(color = "lightblue", size = 3) +
+  geom_node_text(aes(label = name), repel = TRUE, size = 3) +
+  scale_edge_color_manual(values = c("Positive" = "red", "Negative" = "blue")) +
+  theme_void() +
+  ggtitle("Before FMT")
+
+plot_post <- ggraph(graph_post, layout = "circle") +
+  geom_edge_link(aes(color = sign), alpha = 0.8) +
+  geom_node_point(color = "lightgreen", size = 3) +
+  geom_node_text(aes(label = name), repel = TRUE, size = 3) +
+  scale_edge_color_manual(
+    name = "Correlation",
+    values = c("Positive" = "red", "Negative" = "blue")
+  ) +
+  theme_void() +
+  ggtitle("After FMT") +
+  theme(legend.position = "right")
+
+title_combined <- ggplot() +
+  theme_void() +
+  annotate("text", x = 0.5, y = 0.5,
+           label = "Bile acids Spearman Correlations",
+           size = 5, fontface = "bold", hjust = 0.5)
+
+combined_plot <- title_combined / (plot_pre + plot_post + plot_layout(guides = "collect")) +
+  plot_layout(heights = c(0.1, 1))
+
+print(combined_plot)
+
+ggsave("network_combined_pre_post_FMT_corr_FINAL_bile.png",
+       plot = combined_plot, width = 20, height = 9, dpi = 500, bg = "white")
+
+```
+
+## SCFA
+```{r}
+valid_vars <- c(colnames(coredata)[27:37], colnames(coredata)[76:105])
+valid_vars <- valid_vars[sapply(valid_vars, function(v) var(coredata[[v]], na.rm = TRUE) > 1e-6)]
+print(valid_vars)
+
+data_pre <- coredata %>% filter(time == 0) %>% select(all_of(valid_vars))
+data_post <- coredata %>% filter(time == 1) %>% select(all_of(valid_vars))
+
+calc_spearman <- function(data) rcorr(as.matrix(data), type = "spearman")
+cor_pre <- calc_spearman(data_pre)
+cor_post <- calc_spearman(data_post)
+
+cor_matrix_pre <- cor_pre$r
+p_matrix_pre <- cor_pre$P
+cor_matrix_post <- cor_post$r
+p_matrix_post <- cor_post$P
+
+write_xlsx(list(
+  "Spearman_Baseline_scfa" = as.data.frame(cor_matrix_pre),
+  "Spearman_p_Baseline_scfa" = as.data.frame(p_matrix_pre),
+  "Spearman_FollowUp_scfa" = as.data.frame(cor_matrix_post),
+  "Spearman_p_FollowUp_scfa" = as.data.frame(p_matrix_post)
+), "spearman_correlations_full_scfa.xlsx")
+
+
+cor_matrix_pre[p_matrix_pre >= 0.05 | abs(cor_matrix_pre) <= 0.5] <- NA
+cor_matrix_post[p_matrix_post >= 0.05 | abs(cor_matrix_post) <= 0.5] <- NA
+
+edges_pre <- melt(cor_matrix_pre, na.rm = TRUE)
+colnames(edges_pre) <- c("from", "to", "weight")
+edges_pre$weight <- as.numeric(edges_pre$weight)
+edges_pre <- edges_pre[edges_pre$from != edges_pre$to, ]
+edges_pre$sign <- ifelse(edges_pre$weight > 0, "Positive", "Negative")
+
+edges_post <- melt(cor_matrix_post, na.rm = TRUE)
+colnames(edges_post) <- c("from", "to", "weight")
+edges_post$weight <- as.numeric(edges_post$weight)
+edges_post <- edges_post[edges_post$from != edges_post$to, ]
+edges_post$sign <- ifelse(edges_post$weight > 0, "Positive", "Negative")
+
+nodes_pre <- data.frame(name = unique(c(edges_pre$from, edges_pre$to)))
+graph_pre <- tbl_graph(nodes = nodes_pre, edges = edges_pre, directed = FALSE)
+
+nodes_post <- data.frame(name = unique(c(edges_post$from, edges_post$to)))
+graph_post <- tbl_graph(nodes = nodes_post, edges = edges_post, directed = FALSE)
+
+plot_pre <- ggraph(graph_pre, layout = "circle") +
+  geom_edge_link(aes(color = sign), alpha = 0.8, show.legend = FALSE) +
+  geom_node_point(color = "lightblue", size = 3) +
+  geom_node_text(aes(label = name), repel = TRUE, size = 3) +
+  scale_edge_color_manual(values = c("Positive" = "red", "Negative" = "blue")) +
+  theme_void() +
+  ggtitle("Before FMT")
+plot_pre
+
+plot_post <- ggraph(graph_post, layout = "circle") +
+  geom_edge_link(aes(color = sign), alpha = 0.8) +
+  geom_node_point(color = "lightgreen", size = 3) +
+  geom_node_text(aes(label = name), repel = TRUE, size = 3) +
+  scale_edge_color_manual(
+    name = "Correlation",
+    values = c("Positive" = "red", "Negative" = "blue")
+  ) +
+  theme_void() +
+  ggtitle("After FMT") +
+  theme(legend.position = "right")
+
+title_combined <- ggplot() +
+  theme_void() +
+  annotate("text", x = 0.5, y = 0.5,
+           label = "SCFAs metabolites Spearman Correlations",
+           size = 5, fontface = "bold", hjust = 0.5)
+
+combined_plot <- title_combined / (plot_pre + plot_post + plot_layout(guides = "collect")) +
+  plot_layout(heights = c(0.1, 1))
+
+print(combined_plot)
+
+ggsave("network_combined_pre_post_FMT_corr_FINAL_scfa.png",
+       plot = combined_plot, width = 20, height = 9, dpi = 500, bg = "white")
+```
+
+## Energy-related metabolites (tryptophan)
+```{r}
+
+valid_vars <- c(colnames(coredata)[38:75], colnames(coredata)[76:105])
+valid_vars <- valid_vars[sapply(valid_vars, function(v) var(coredata[[v]], na.rm = TRUE) > 1e-6)]
+print(valid_vars)
+
+data_pre <- coredata %>% filter(time == 0) %>% select(all_of(valid_vars))
+data_post <- coredata %>% filter(time == 1) %>% select(all_of(valid_vars))
+
+calc_spearman <- function(data) rcorr(as.matrix(data), type = "spearman")
+cor_pre <- calc_spearman(data_pre)
+cor_post <- calc_spearman(data_post)
+
+cor_matrix_pre <- cor_pre$r
+p_matrix_pre <- cor_pre$P
+cor_matrix_post <- cor_post$r
+p_matrix_post <- cor_post$P
+
+write_xlsx(list(
+  "Spearman_Baseline_energy" = as.data.frame(cor_matrix_pre),
+  "Spearman_p_Baseline_energy" = as.data.frame(p_matrix_pre),
+  "Spearman_FollowUp_energy" = as.data.frame(cor_matrix_post),
+  "Spearman_p_FollowUp_energy" = as.data.frame(p_matrix_post)
+), "spearman_correlations_full_energy.xlsx")
+
+
+cor_matrix_pre[p_matrix_pre >= 0.05 | abs(cor_matrix_pre) <= 0.5] <- NA
+cor_matrix_post[p_matrix_post >= 0.05 | abs(cor_matrix_post) <= 0.5] <- NA
+
+edges_pre <- melt(cor_matrix_pre, na.rm = TRUE)
+colnames(edges_pre) <- c("from", "to", "weight")
+edges_pre$weight <- as.numeric(edges_pre$weight)
+edges_pre <- edges_pre[edges_pre$from != edges_pre$to, ]
+edges_pre$sign <- ifelse(edges_pre$weight > 0, "Positive", "Negative")
+
+edges_post <- melt(cor_matrix_post, na.rm = TRUE)
+colnames(edges_post) <- c("from", "to", "weight")
+edges_post$weight <- as.numeric(edges_post$weight)
+edges_post <- edges_post[edges_post$from != edges_post$to, ]
+edges_post$sign <- ifelse(edges_post$weight > 0, "Positive", "Negative")
+
+nodes_pre <- data.frame(name = unique(c(edges_pre$from, edges_pre$to)))
+graph_pre <- tbl_graph(nodes = nodes_pre, edges = edges_pre, directed = FALSE)
+
+nodes_post <- data.frame(name = unique(c(edges_post$from, edges_post$to)))
+graph_post <- tbl_graph(nodes = nodes_post, edges = edges_post, directed = FALSE)
+
+plot_pre <- ggraph(graph_pre, layout = "circle") +
+  geom_edge_link(aes(color = sign), alpha = 0.8, show.legend = FALSE) +
+  geom_node_point(color = "lightblue", size = 3) +
+  geom_node_text(aes(label = name), repel = TRUE, size = 3) +
+  scale_edge_color_manual(values = c("Positive" = "red", "Negative" = "blue")) +
+  theme_void() +
+  ggtitle("Before FMT")
+plot_pre
+
+plot_post <- ggraph(graph_post, layout = "circle") +
+  geom_edge_link(aes(color = sign), alpha = 0.8) +
+  geom_node_point(color = "lightgreen", size = 3) +
+  geom_node_text(aes(label = name), repel = TRUE, size = 3) +
+  scale_edge_color_manual(
+    name = "Correlation",
+    values = c("Positive" = "red", "Negative" = "blue")
+  ) +
+  theme_void() +
+  ggtitle("After FMT") +
+  theme(legend.position = "right")
+
+title_combined <- ggplot() +
+  theme_void() +
+  annotate("text", x = 0.5, y = 0.5,
+           label = "Energy-related metabolites Spearman Correlations",
+           size = 5, fontface = "bold", hjust = 0.5)
+
+combined_plot <- title_combined / (plot_pre + plot_post + plot_layout(guides = "collect")) +
+  plot_layout(heights = c(0.1, 1))
+
+print(combined_plot)
+
+ggsave("network_combined_pre_post_FMT_corr_FINAL_energy.png",
+       plot = combined_plot, width = 20, height = 9, dpi = 500, bg = "white")
+```
+
+# PLS2 before preparation - Data reduction
+
+## Lasso before
+
+```{r}
+X <- as.data.frame(X)
+X_b4 <- X %>% slice(-(18:34))
+
+Y <- as.data.frame(Y)
+Y_b4 <- Y %>% slice(-(18:34))
+
+Y_b4 <- as.matrix(Y_b4)
+X_b4 <- as.matrix(X_b4)
+
+lasso_b4_results <- list()
+
+for (i in 1:ncol(Y_b4)) {
+  target <- Y_b4[, i]
+  lasso_model <- cv.glmnet(X_b4, target, alpha = 1, nfolds = 5, lambda.min.ratio = 0.1)
+  lasso_b4_results[[colnames(Y)[i]]] <- list(
+    lambda.min = lasso_model$lambda.min,
+    selected_features = coef(lasso_model, s = "lambda.min")[-1]
+  )
+}
+
+lasso_b4_results
+
+```
+
+### Selected features LASSO before
+
+```{r}
+selected_features_union_b4 <- numeric(0)
+
+for (result in lasso_b4_results) {
+  selected_features_b4 <- result$selected_features
+  selected_indices_b4 <- which(selected_features_b4 != 0)
+  selected_features_union_b4 <- union(selected_features_union_b4, selected_indices_b4)
+}
+
+X_b4_reduced <- X_b4[, selected_features_union_b4]
+```
+
+### Reduce Y matrix before
+```{r}
+PCA_Y_b4 <- prcomp(Y_b4, scale. = TRUE)
+summary(PCA_Y_b4)
+
+cumulative_variance <- cumsum(summary(PCA_Y_b4)$importance[2,])
+num_components_to_keep <- which(cumulative_variance >= 0.90)[1]
+
+Y_b4_reduced <- PCA_Y_b4$x[, 1:4]
+
+plot(PCA_Y_b4)
+dim(X_b4_reduced)
+dim(Y_b4_reduced)
+
+```
+
+# PLS2 before
+
+```{r}
+if ("var" %in% ls()) rm(var)
+
+X_b4_reduced <- as.matrix(X_b4_reduced)
+Y_b4_reduced <- as.matrix(Y_b4_reduced)
+
+pls_b4_model <- plsr(Y_b4_reduced ~ X_b4_reduced, ncomp = 8, validation = "CV")
+
+r2_b4_train <- R2(pls_b4_model, estimate = "train")$val[, , 1]
+r2_b4_cv <- R2(pls_b4_model, estimate = "CV")$val[, , 1]
+
+rmsep_b4_train <- RMSEP(pls_b4_model, estimate = "train")$val[, , 1]
+rmsep_b4_cv <- RMSEP(pls_b4_model, estimate = "CV")$val[, , 1]
+
+model_b4_metrics <- data.frame(
+  Components = 1:length(r2_b4_train),
+  R2_Train = r2_b4_train,
+  R2_CV = r2_b4_cv,
+  RMSEP_Train = rmsep_b4_train,
+  RMSEP_CV = rmsep_b4_cv
+)
+
+
+ggplot(model_b4_metrics, aes(x = Components)) +
+  geom_line(aes(y = R2_Train, color = "Train R2"), size = 1.2) +
+  geom_line(aes(y = R2_CV, color = "CV R2"), size = 1.2, linetype = "dashed") +
+  theme_minimal() +
+  scale_color_manual(values = c("Train R2" = "blue", "CV R2" = "red"))
+
+ggplot(model_b4_metrics, aes(x = Components)) +
+  geom_line(aes(y = RMSEP_Train, color = "Train RMSEP"), size = 1.2) +
+  geom_line(aes(y = RMSEP_CV, color = "CV RMSEP"), size = 1.2, linetype = "dashed") +
+  theme_minimal() +
+  scale_color_manual(values = c("Train RMSEP" = "blue", "CV RMSEP" = "red"))
+
+var_X_b4 <- apply(X_b4_reduced, 2, stats::var)
+var_Y_b4 <- apply(Y_b4_reduced, 2, stats::var)
+
+summary(var_X_b4)
+summary(var_Y_b4)
+
+```
+
+
+
+
+## Interpretation PLS2 before
+
+```{r}
+R2_X_components <- explvar(pls_b4_model) / 100
+R2_X_overall <- sum(R2_X_components)
+cat("Overall R²_X:", R2_X_overall, "\n")
+
+mean_Y <- colMeans(Y_b4_reduced)
+TSS <- sum((Y_b4_reduced - mean_Y)^2)
+
+fitted_values_avg <- apply(pls_b4_model$fitted.values, c(1, 2), mean)
+RSS <- sum((Y_b4_reduced - fitted_values_avg)^2)
+
+R2_Y <- 1 - (RSS / TSS)
+cat("Overall R²_Y: ", R2_Y, "\n")
+
+cor(pls_b4_model$scores, pls_b4_model$Yscores)
+explvar(pls_b4_model)
+summary(pls_b4_model)
+
+n <- nrow(Y_b4_reduced)
+PRESS_LOO <- 0
+
+for (i in 1:n) {
+  Y_train <- Y_b4_reduced[-i, , drop = FALSE]
+  X_train <- X_b4_reduced[-i, , drop = FALSE]
+  pls_model <- plsr(Y_train ~ X_train, ncomp = 4)
+  Y_pred <- predict(pls_model, newdata = X_b4_reduced[i, , drop = FALSE], ncomp = 4)
+  PRESS_LOO <- PRESS_LOO + (Y_b4_reduced[i, ] - Y_pred)^2
+}
+
+PRESS_LOO
+
+Y_mean <- mean(Y_b4_reduced)
+TSS <- sum((Y_b4_reduced - Y_mean)^2)
+
+Q2 <- 1 - (PRESS_LOO / TSS)
+cat("Q² value:", Q2, "\n")
+
+Q2_avg <- mean(c(0.2189465, 0.6484686, 0.8290256, 0.8701196))
+cat("Q² avg value:", Q2_avg, "\n")
+
+```
+
+
+## VIP before
+```{r}
+calculate_vip <- function(model) {
+  W <- model$loading.weights
+  Yscores <- model$Yscores
+
+  p <- nrow(W)
+  SSY <- colSums(Yscores^2)
+  SSY_diag <- diag(SSY)
+
+  vip_scores <- sqrt(p * rowSums((W^2) %*% SSY_diag) / sum(SSY))
+  return(vip_scores)
+}
+
+vip_scores <- calculate_vip(pls_b4_model)
+
+if (length(vip_scores) == ncol(X_b4_reduced)) {
+  names(vip_scores) <- colnames(X_b4_reduced)
+} else {
+  warning("Mismatch between VIP scores and predictors, use generic names.")
+  names(vip_scores) <- paste0("Var", seq_along(vip_scores))
+}
+
+vip_df <- data.frame(
+  Variable = names(vip_scores),
+  VIP = vip_scores
+)
+
+vip_df <- vip_df %>%
+  filter(VIP > 1) %>%
+  arrange(desc(VIP))
+print(vip_df)
+
+name_map <- setNames(taxa$Species, taxa$genome)
+
+vip_df$Label <- ifelse(vip_df$Variable %in% names(name_map),
+                       name_map[vip_df$Variable],
+                       vip_df$Variable)
+
+ggplot(vip_df, aes(x = reorder(Label, VIP), y = VIP)) +
+  geom_bar(stat = "identity", fill = "steelblue") +
+  coord_flip() +
+  labs(title = "VIP Scores > 1 – Before FMT (PLS2 model)",
+       x = "Microbial Features",
+       y = "VIP Score") +
+  theme_minimal()
+
+```
+
+# PLS2 after preparation - Data reduction
+
+## Lasso after
+```{r}
+X <- as.data.frame(X)
+X_af <- X %>% slice(-(1:17))
+
+Y <- as.data.frame(Y)
+Y_af <- Y %>% slice(-(1:17))
+
+Y_af <- as.matrix(Y_af)
+X_af <- as.matrix(X_af)
+
+lasso_af_results <- list()
+
+for (i in 1:ncol(Y_af)) {
+  target <- Y_af[, i]
+  lasso_model <- cv.glmnet(X_af, target, alpha = 1, nfolds = 5, lambda.min.ratio = 0.1)
+  lasso_af_results[[colnames(Y_af)[i]]] <- list(
+    lambda.min = lasso_model$lambda.min,
+    selected_features = coef(lasso_model, s = "lambda.min")[-1]
+  )
+}
+
+lasso_af_results
+
+```
+
+
+### Selected features Lasso after
+```{r}
+selected_features_union_af <- numeric(0)
+
+for (result in lasso_af_results) {
+  selected_features_af <- result$selected_features
+  selected_indices_af <- which(selected_features_af != 0)
+  selected_features_union_af <- union(selected_features_union_af, selected_indices_af)
+}
+
+X_af_reduced <- X_af[, selected_features_union_af]
+
+```
+
+
+### Reduce Y matrix after
+```{r}
+PCA_Y_af <- prcomp(Y_af, scale. = TRUE)
+
+summary(PCA_Y_af)
+
+cumulative_variance_af <- cumsum(summary(PCA_Y_af)$importance[2,])
+
+num_components_to_keep_af <- which(cumulative_variance_af >= 0.90)[1]
+
+Y_af_reduced <- PCA_Y_af$x[, 1:4]
+
+plot(PCA_Y_af)
+dim(X_af_reduced)
+dim(Y_af_reduced)
+```
+
+# PLS2 after
+```{r}
+X_af_reduced <- as.matrix(X_af_reduced)
+Y_af_reduced <- as.matrix(Y_af_reduced)
+
+pls_af_model <- plsr(Y_af_reduced ~ X_af_reduced, 
+                  ncomp = 8, validation = "CV")
+
+r2_af_train <- R2(pls_af_model, estimate = "train")$val[, , 1]  
+r2_af_cv <- R2(pls_af_model, estimate = "CV")$val[, , 1]        
+
+rmsep_af_train <- RMSEP(pls_af_model, estimate = "train")$val[, , 1]
+rmsep_af_cv <- RMSEP(pls_af_model, estimate = "CV")$val[, , 1]
+
+model_af_metrics <- data.frame(
+  Components = 1:length(r2_af_train),
+  R2_Train = r2_af_train,
+  R2_CV = r2_af_cv,
+  RMSEP_Train = rmsep_af_train,
+  RMSEP_CV = rmsep_af_cv
+)
+
+ggplot(model_af_metrics, aes(x = Components)) +
+  geom_line(aes(y = R2_Train, color = "Train R2"), size = 1.2) +
+  geom_line(aes(y = R2_CV, color = "CV R2"), size = 1.2, linetype = "dashed") +
+  theme_minimal() +
+  scale_color_manual(values = c("Train R2" = "blue", "CV R2" = "red"))
+
+ggplot(model_af_metrics, aes(x = Components)) +
+  geom_line(aes(y = RMSEP_Train, color = "Train RMSEP"), size = 1.2) +
+  geom_line(aes(y = RMSEP_CV, color = "CV RMSEP"), size = 1.2, linetype = "dashed") +
+  theme_minimal() +
+  scale_color_manual(values = c("Train RMSEP" = "blue", "CV RMSEP" = "red"))
+
+
+var_X_af <- apply(X_af_reduced, 2, var)  
+var_Y_af <- apply(Y_af_reduced, 2, var)  
+
+summary(var_X_af)
+summary(var_Y_af)
+
+```
+
+## Interpretation PLS2 after
+```{r}
+R2_X_components <- explvar(pls_af_model) / 100
+R2_X_overall <- sum(R2_X_components)
+cat("Overall R²_X:", R2_X_overall, "\n")
+
+mean_Y <- colMeans(Y_af_reduced)
+TSS <- sum((Y_af_reduced - mean_Y)^2)
+fitted_values_avg <- apply(pls_af_model$fitted.values, c(1, 2), mean)
+RSS <- sum((Y_af_reduced - fitted_values_avg)^2)
+R2_Y <- 1 - (RSS / TSS)
+cat("Overall R²_Y: ", R2_Y, "\n")
+
+cor(pls_af_model$scores, pls_af_model$Yscores)
+explvar(pls_af_model)
+summary(pls_af_model)
+
+n <- nrow(Y_af_reduced)
+PRESS_LOO <- 0
+for (i in 1:n) {
+  Y_train <- Y_af_reduced[-i, , drop = FALSE]
+  X_train <- X_af_reduced[-i, , drop = FALSE]
+  pls_model <- plsr(Y_train ~ X_train, ncomp = 4)
+  Y_pred <- predict(pls_model, newdata = X_af_reduced[i, , drop = FALSE], ncomp = 4)
+  PRESS_LOO <- PRESS_LOO + (Y_af_reduced[i, ] - Y_pred)^2
+}
+PRESS_LOO
+Y_mean <- mean(Y_af_reduced)
+TSS <- sum((Y_af_reduced - Y_mean)^2)
+Q2 <- 1 - (PRESS_LOO / TSS)
+cat("Q² value:", Q2, "\n")
+Q2_avg <- mean(c(0.8131485,0.7313166, 0.7771231, 0.7855486 ))
+cat("Q² avg value:", Q2_avg, "\n")
+```
+
+## VIP after
+```{r}
+calculate_vip <- function(model) {
+  W <- model$loading.weights         
+  Yscores <- model$Yscores           
+
+  p <- nrow(W)                       
+  SSY <- colSums(Yscores^2)          
+  SSY_diag <- diag(SSY)              
+
+  vip_scores <- sqrt(p * rowSums((W^2) %*% SSY_diag) / sum(SSY))
+  return(vip_scores)
+}
+
+vip_scores <- calculate_vip(pls_af_model)
+
+if (length(vip_scores) == ncol(X_af_reduced)) {
+  names(vip_scores) <- colnames(X_af_reduced)
+} else {
+  warning("Mismatch between VIP scores and predictors, use generic names.")
+  names(vip_scores) <- paste0("Var", seq_along(vip_scores))
+}
+
+vip_df <- data.frame(
+  Variable = names(vip_scores),
+  VIP = vip_scores
+)
+
+vip_df <- vip_df %>%
+  filter(VIP > 1) %>%
+  arrange(desc(VIP))
+print(vip_df)
+
+name_map <- setNames(taxa$Species, taxa$genome)
+
+vip_df$Label <- ifelse(vip_df$Variable %in% names(name_map),
+                       name_map[vip_df$Variable],
+                       vip_df$Variable)  
+
+ggplot(vip_df, aes(x = reorder(Label, VIP), y = VIP)) +
+  geom_bar(stat = "identity", fill = "steelblue") +
+  coord_flip() +
+  labs(title = "VIP Scores > 1 – After FMT (PLS2 model)",
+       x = "Microbial Features",
+       y = "VIP Score") +
+  theme_minimal()
+
+```
+
+# Preparation PLS2 on the change score
+## Lasso change score
+```{r}
+X_change <- X_af - X_b4  
+Y_change <- Y_af - Y_b4  
+
+lasso_change_results <- list()
+
+for (i in 1:ncol(Y_change)) {
+  target <- Y_change[, i]  
+  
+  lasso_model <- cv.glmnet(X_change, target, alpha = 1, nfolds = 5, lambda.min.ratio = 0.1)
+  
+  lasso_change_results[[colnames(Y_change)[i]]] <- list(
+    lambda.min = lasso_model$lambda.min,  
+    selected_features = coef(lasso_model, s = "lambda.1se")[-1]  
+  )
+}
+
+```
+
+### Selected features Lasso change score
+```{r}
+selected_features_union_change <- numeric(0)
+
+for (result in lasso_change_results) {
+  selected_features_change <- result$selected_features  
+  selected_indices_change <- which(selected_features_change != 0)  
+  selected_features_union_change <- union(selected_features_union_change, selected_indices_change)  
+}
+
+X_change_reduced <- X_change[, selected_features_union_change, drop = FALSE]
+
+```
+
+## Reduce Y matrix change
+```{r}
+PCA_Y_change <- prcomp(Y_change, scale. = TRUE)
+
+cumulative_variance_change <- cumsum(summary(PCA_Y_change)$importance[2,])
+num_components_to_keep_change <- which(cumulative_variance_change >= 0.90)[1]  
+Y_change_reduced <- PCA_Y_change$x[, 1:4]  
+
+X_change_reduced <- as.matrix(X_change_reduced)
+Y_change_reduced <- as.matrix(Y_change_reduced)
+
+dim(X_change_reduced)
+dim(Y_change_reduced)
+
+```
+
+# PLS2 change score
+```{r}
+pls_change_model <- plsr(Y_change_reduced ~ X_change_reduced, ncomp = 4, validation = "CV")
+
+r2_change_train <- R2(pls_change_model, estimate = "train")$val[, , 1]  
+r2_change_cv <- R2(pls_change_model, estimate = "CV")$val[, , 1]        
+
+rmsep_change_train <- RMSEP(pls_change_model, estimate = "train")$val[, , 1]
+rmsep_change_cv <- RMSEP(pls_change_model, estimate = "CV")$val[, , 1]
+
+model_change_metrics <- data.frame(
+  Components = 1:length(r2_change_train),
+  R2_Train = r2_change_train,
+  R2_CV = r2_change_cv,
+  RMSEP_Train = rmsep_change_train,
+  RMSEP_CV = rmsep_change_cv
+)
+
+ggplot(model_change_metrics, aes(x = Components)) +
+  geom_line(aes(y = R2_Train, color = "Train R2"), size = 1.2) +
+  geom_line(aes(y = R2_CV, color = "CV R2"), size = 1.2, linetype = "dashed") +
+  theme_minimal() +
+  scale_color_manual(values = c("Train R2" = "blue", "CV R2" = "red"))
+
+ggplot(model_change_metrics, aes(x = Components)) +
+  geom_line(aes(y = RMSEP_Train, color = "Train RMSEP"), size = 1.2) +
+  geom_line(aes(y = RMSEP_CV, color = "CV RMSEP"), size = 1.2, linetype = "dashed") +
+  theme_minimal() +
+  scale_color_manual(values = c("Train RMSEP" = "blue", "CV RMSEP" = "red"))
+```
+
+## Interpretation PLS2 
+```{r}
+R2_X_components <- explvar(pls_change_model) / 100  
+R2_X_overall <- sum(R2_X_components)
+cat("Overall R²_X:", R2_X_overall, "\n")
+
+mean_Y <- colMeans(Y_change_reduced)  
+TSS <- sum((Y_change_reduced - mean_Y)^2) 
+
+
+fitted_values_avg <- apply(pls_change_model$fitted.values, c(1, 2), mean)  
+RSS <- sum((Y_change_reduced - fitted_values_avg)^2)  
+R2_Y <- 1 - (RSS / TSS)
+
+cat("Overall R²_Y: ", R2_Y, "\n")
+
+n <- nrow(Y_change_reduced)
+PRESS_LOO <- 0
+
+
+for (i in 1:n) {
+  Y_train <- Y_change_reduced[-i, , drop = FALSE]  
+  X_train <- X_change_reduced[-i, , drop = FALSE]  
+  pls_model <- plsr(Y_train ~ X_train, ncomp = 4)  
+  
+  Y_pred <- predict(pls_model, newdata = X_change_reduced[i, , drop = FALSE], ncomp = 4)
+  
+  PRESS_LOO <- PRESS_LOO + (Y_change_reduced[i, ] - Y_pred)^2
+}
+
+PRESS_LOO
+
+
+Y_mean <- mean(Y_change_reduced)  
+TSS <- sum((Y_change_reduced - Y_mean)^2)
+
+
+Q2 <- 1 - (PRESS_LOO / TSS)
+cat("Q² value:", Q2, "\n")
+
+Q2_avg<-mean(c(-0.2151813,0.5213792, 0.5226971, 0.8328052))
+cat("Q² avg value:", Q2_avg, "\n")
+```
+## VIP change score
+```{r}
+calculate_vip <- function(model, X_matrix, name_map, title_plot = "VIP Scores") {
+  W <- model$loading.weights        
+  Yscores <- model$Yscores           
+  p <- nrow(W)
+  SSY <- colSums(Yscores^2)
+  SSY_diag <- diag(SSY)
+
+  vip_scores <- sqrt(p * rowSums((W^2) %*% SSY_diag) / sum(SSY))
+
+  if (length(vip_scores) == ncol(X_matrix)) {
+    names(vip_scores) <- colnames(X_matrix)
+  } else {
+    warning("Mismatch between VIP scores and predictors, use generic names.")
+    names(vip_scores) <- paste0("Var", seq_along(vip_scores))
+  }
+
+  vip_df <- data.frame(
+    Variable = names(vip_scores),
+    VIP = vip_scores
+  ) %>%
+    filter(VIP > 1) %>%
+    arrange(desc(VIP))
+  vip_df$Label <- ifelse(vip_df$Variable %in% names(name_map),
+                         name_map[vip_df$Variable],
+                         vip_df$Variable)
+
+  p <- ggplot(vip_df, aes(x = reorder(Label, VIP), y = VIP)) +
+    geom_bar(stat = "identity", fill = "steelblue") +
+    coord_flip() +
+    labs(title = title_plot,
+         x = "Microbial Features",
+         y = "VIP Score") +
+    theme_minimal(base_size = 13)
+
+  print(p)
+  return(vip_df)
+}
+
+name_map <- setNames(taxa$Species, taxa$genome)
+vip_b4_df <- calculate_vip(pls_b4_model, X_b4_reduced, name_map, "VIP Scores > 1 – Before FMT")
+vip_af_df <- calculate_vip(pls_af_model, X_af_reduced, name_map, "VIP Scores > 1 – After FMT")
+vip_delta_df <- calculate_vip(pls_change_model, X_change_reduced, name_map, "VIP Scores > 1 – Delta FMT")
+
+```
+
+# Graphical representation before & after
+```{r}
+scores_b4 <- get_scores_df(pls_b4_model, "Before")
+scores_af <- get_scores_df(pls_af_model, "After")
+scores_change <- get_scores_df(pls_change_model, "Delta")
+scores_all <- rbind(scores_b4, scores_af, scores_change)
+
+ggplot(scores_all, aes(x = Comp1, y = Comp2, color = Group)) +
+  geom_point(size = 3, alpha = 0.9) +
+  stat_ellipse(type = "t", level = 0.95, linetype = "dashed") +
+  labs(title = "PLS-2 Score Plot", x = "Component 1", y = "Component 2") +
+  theme_minimal(base_size = 14) +
+  scale_color_npg()  
+
+vip_b4 <- calculate_vip(pls_b4_model, X_b4_reduced, name_map, title_plot = NULL)
+vip_af <- calculate_vip(pls_af_model, X_af_reduced, name_map, title_plot = NULL)
+vip_delta <- calculate_vip(pls_change_model, X_change_reduced, name_map, title_plot = NULL)
+
+vip_b4_vec <- vip_b4$VIP; names(vip_b4_vec) <- vip_b4$Variable
+vip_af_vec <- vip_af$VIP; names(vip_af_vec) <- vip_af$Variable
+vip_delta_vec <- vip_delta$VIP; names(vip_delta_vec) <- vip_delta$Variable
+
+all_taxa <- unique(c(names(vip_b4_vec), names(vip_af_vec), names(vip_delta_vec)))
+
+vip_matrix <- matrix(0, nrow = length(all_taxa), ncol = 3)
+rownames(vip_matrix) <- all_taxa
+colnames(vip_matrix) <- c("Before FMT", "After FMT", "Delta")
+
+vip_matrix[rownames(vip_matrix) %in% names(vip_b4_vec), "Before FMT"] <- vip_b4_vec[rownames(vip_matrix)[rownames(vip_matrix) %in% names(vip_b4_vec)]]
+vip_matrix[rownames(vip_matrix) %in% names(vip_af_vec), "After FMT"] <- vip_af_vec[rownames(vip_matrix)[rownames(vip_matrix) %in% names(vip_af_vec)]]
+vip_matrix[rownames(vip_matrix) %in% names(vip_delta_vec), "Delta"] <- vip_delta_vec[rownames(vip_matrix)[rownames(vip_matrix) %in% names(vip_delta_vec)]]
+
+taxa_labels <- name_map[rownames(vip_matrix)]
+rownames(vip_matrix) <- ifelse(!is.na(taxa_labels), taxa_labels, rownames(vip_matrix))
+
+vip_matrix_filtered <- vip_matrix[apply(vip_matrix, 1, function(x) any(x > 1)), ]
+
+pheatmap(vip_matrix_filtered,
+         cluster_rows = TRUE,
+         cluster_cols = FALSE,
+         color = colorRampPalette(brewer.pal(9, "YlGnBu"))(100),
+         main = "",
+         show_rownames = TRUE,
+         fontsize_row = 8,
+         border_color = NA)
+```
+
+
+# Coinertia on change
+```{r}
+change_X <- X_af - X_b4
+change_Y <- Y_af - Y_b4
+
+# Convert to dudi objects using PCA (Principal Component Analysis)
+dudi_X <- dudi.pca(change_X, scannf = FALSE, nf = 2)  # nf = number of principal components
+dudi_Y <- dudi.pca(change_Y, scannf = FALSE, nf = 2)
+
+class(dudi_X)
+
+coinertia_result <- coinertia(dudi_X, dudi_Y, scannf = FALSE)
+
+# Perform the Monte Carlo test for coinertia with PCA scores (li) from the dudi object
+coinertia_significance <- RV.rtest(dudi_X$tab, dudi_Y$tab, nrepet = 999)
+
+```
+
+## Permutation test (same as Monte Carlo above)
+```{r}
+# Permutation function for coinertia 
+permute_coinertia <- function(dudi1, dudi2, n_permutations = 999, nf = 2) {
+  permuted_RVs <- numeric(n_permutations)
+  
+  data1_li <- dudi1$tab  # X PCs
+  data2_li <- dudi2$tab  # Y PCs
+  
+  # Perform permutation test
+  for (i in 1:n_permutations) {
+    data2_permuted <- data2_li[sample(nrow(data2_li)), , drop = FALSE]  
+    
+    dudi_data2_permuted <- dudi.pca(data2_permuted, scannf = FALSE, nf = nf) 
+    
+    permuted_result <- coinertia(dudi1, dudi_data2_permuted, nf = nf, scannf = FALSE)  
+    permuted_RVs[i] <- permuted_result$RV  
+  }
+  
+  return(permuted_RVs)
+}
+
+coinertia_result <- coinertia(dudi_X, dudi_Y, nf = 2, scannf = FALSE)  
+observed_RV <- coinertia_result$RV
+cat("Observed RV value:", observed_RV, "\n")
+
+permuted_RVs <- permute_coinertia(dudi_X, dudi_Y, n_permutations = 999, nf = 2)
+
+hist(permuted_RVs, main = "Permutation distribution of RV", xlab = "Permuted RV values")
+
+# Calculate the p-value (obs. RV vs. permutation distribution)
+p_value <- mean(permuted_RVs >= observed_RV)
+
+
+```
+
+
+# Coinertia before and after data
+```{r}
+# PCA before
+dudi_X_b4 <- dudi.pca(X_b4, scal = TRUE, scannf = FALSE)
+dudi_Y_b4 <- dudi.pca(Y_b4, scal = TRUE, scannf = FALSE)
+
+# PCA after
+dudi_X_af <- dudi.pca(X_af, scal = TRUE, scannf = FALSE)
+dudi_Y_af <- dudi.pca(Y_af, scal = TRUE, scannf = FALSE)
+
+# Coinertia before
+coinertia_before <- coinertia(dudi_X_b4, dudi_Y_b4, nf = 2, scannf = FALSE)
+
+# Coinertia after
+coinertia_after <- coinertia(dudi_X_af, dudi_Y_af, nf = 2, scannf = FALSE)
+
+
+# Monte-Carlo test before and after
+rv_test_before <- RV.rtest(dudi_X_b4$tab, dudi_Y_b4$tab, nrepet = 999)
+rv_test_after <- RV.rtest(dudi_X_af$tab, dudi_Y_af$tab, nrepet = 999)
+
+print(rv_test_before)
+
+print(rv_test_after)
+
+# Plot the results
+par(mfrow = c(1, 2))
+plot(rv_test_before, main = "RV Test - Before Data", xlab = "Permutation", ylab = "RV Statistic")
+plot(rv_test_after, main = "RV Test - After Data", xlab = "Permutation", ylab = "RV Statistic")
+
+
+```
+
+
+
